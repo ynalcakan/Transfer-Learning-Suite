@@ -2,6 +2,7 @@ from __future__ import print_function
 
 # Networks
 from keras.preprocessing import image
+from keras.applications.resnet26 import ResNet26
 from keras.applications.resnet50 import ResNet50
 from keras.applications.vgg16 import VGG16
 from keras.applications.vgg19 import VGG19
@@ -54,7 +55,7 @@ parser.add_argument('--mode', type=str, default="train", help='Select "train", o
     Note that for prediction mode you have to specify an image to run the model on.')
 parser.add_argument('--image', type=str, default=None, help='The image you want to predict on. Only valid in "predict" mode.')
 parser.add_argument('--continue_training', type=str2bool, default=False, help='Whether to continue training from a checkpoint')
-parser.add_argument('--dataset', type=str, default="Pets", help='Dataset you are using.')
+parser.add_argument('--dataset', type=str, default="funghi_images", help='Dataset you are using.')
 parser.add_argument('--resize_height', type=int, default=224, help='Height of cropped input image to network')
 parser.add_argument('--resize_width', type=int, default=224, help='Width of cropped input image to network')
 parser.add_argument('--batch_size', type=int, default=32, help='Number of images in each batch')
@@ -90,10 +91,10 @@ elif args.model == "VGG19":
     from keras.applications.vgg19 import preprocess_input
     preprocessing_function = preprocess_input
     base_model = VGG19(weights='imagenet', include_top=False, input_shape=(HEIGHT, WIDTH, 3))
-elif args.model == "ResNet50":
-    from keras.applications.resnet50 import preprocess_input
+elif args.model == "ResNet26":
+    from keras.applications.resnet26 import preprocess_input
     preprocessing_function = preprocess_input
-    base_model = ResNet50(weights='imagenet', include_top=False, input_shape=(HEIGHT, WIDTH, 3))
+    base_model = ResNet26(weights='imagenet', include_top=False, input_shape=(HEIGHT, WIDTH, 3))
 elif args.model == "InceptionV3":
     from keras.applications.inception_v3 import preprocess_input
     preprocessing_function = preprocess_input
@@ -133,7 +134,7 @@ elif args.model == "NASNetMobile":
 else:
     ValueError("The model you requested is not supported in Keras")
 
-    
+
 if args.mode == "train":
     print("\n***** Begin training *****")
     print("Dataset -->", args.dataset)
@@ -201,7 +202,7 @@ if args.mode == "train":
     callbacks_list = [checkpoint]
 
 
-    history = finetune_model.fit_generator(train_generator, epochs=args.num_epochs, workers=8, steps_per_epoch=num_train_images // BATCH_SIZE, 
+    history = finetune_model.fit_generator(train_generator, epochs=args.num_epochs, workers=8, steps_per_epoch=num_train_images // BATCH_SIZE,
         validation_data=validation_generator, validation_steps=num_val_images // BATCH_SIZE, class_weight='auto', shuffle=True, callbacks=callbacks_list)
 
 
@@ -225,7 +226,7 @@ elif args.mode == "predict":
     class_list_file = "./checkpoints/" + args.model + "_" + args.dataset + "_class_list.txt"
 
     class_list = utils.load_class_list(class_list_file)
-    
+
     finetune_model = utils.build_finetune_model(base_model, len(class_list))
     finetune_model.load_weights("./checkpoints/" + args.model + "_model_weights.h5")
 

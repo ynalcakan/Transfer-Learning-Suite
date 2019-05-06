@@ -19,6 +19,16 @@ import os, sys, csv
 import cv2
 import time, datetime
 
+import split_folders
+
+
+def split_folders(input_folder):
+    try:
+        split_folders.ratio(input_folder, output="output", seed=5, ratio=(0.8, 0.1, 0.1)) # default values
+        print("done!")
+    except Exception as e:
+        print(e)
+
 
 def save_class_list(class_list, model_name, dataset_name):
     class_list.sort()
@@ -64,7 +74,7 @@ def build_finetune_model(base_model, dropout, fc_layers, num_classes):
         x = Dropout(dropout)(x)
 
     predictions = Dense(num_classes, activation='softmax')(x) # New softmax layer
-    
+
     finetune_model = Model(inputs=base_model.input, outputs=predictions)
 
     return finetune_model
