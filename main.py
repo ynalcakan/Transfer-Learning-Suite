@@ -10,6 +10,7 @@ from keras.applications.inception_v3 import InceptionV3
 from keras.applications.xception import Xception
 from keras.applications.inception_resnet_v2 import InceptionResNetV2
 from keras.applications.mobilenet import MobileNet
+from keras.applications.mobilenet_v2 import MobileNetV2
 from keras.applications.densenet import DenseNet121, DenseNet169, DenseNet201
 from keras.applications.nasnet import NASNetLarge, NASNetMobile
 from keras.preprocessing.image import ImageDataGenerator
@@ -23,7 +24,7 @@ from keras import optimizers
 from keras import losses
 from keras.optimizers import SGD, Adam
 from keras.models import Sequential, Model
-from keras.callbacks import ModelCheckpoint, LearningRateScheduler, EarlyStopping
+from keras.callbacks import ModelCheckpoint, LearningRateScheduler, EarlyStopping, TensorBoard
 from keras.models import load_model
 
 # Utils
@@ -111,6 +112,10 @@ elif args.model == "MobileNet":
     from keras.applications.mobilenet import preprocess_input
     preprocessing_function = preprocess_input
     base_model = MobileNet(weights='imagenet', include_top=False, input_shape=(HEIGHT, WIDTH, 3))
+elif args.model == "MobileNetV2":
+    from keras.applications.mobilenet_v2 import preprocess_input
+    preprocessing_function = preprocess_input
+    base_model = MobileNetV2(weights='imagenet', include_top=False, input_shape=(HEIGHT, WIDTH, 3))
 elif args.model == "DenseNet121":
     from keras.applications.densenet import preprocess_input
     preprocessing_function = preprocess_input
@@ -170,7 +175,7 @@ if args.mode == "train":
 
     train_generator = train_datagen.flow_from_directory(TRAIN_DIR, target_size=(HEIGHT, WIDTH), batch_size=BATCH_SIZE)
 
-    validation_generator = val_datagen.flow_from_directory(VAL_DIR, target_size=(HEIGHT, WIDTH), batch_size=BATCH_SIZE)
+    validation_generator = val_datagen.flow_from_directory(VAL_DIR, target_size=(HEIGHT, WIDTH), batch_size=int(BATCH_SIZE/2))
 
 
     # Save the list of classes for prediction mode later
@@ -201,7 +206,6 @@ if args.mode == "train":
     # checkpoint callback
     filepath="./checkpoints/" + args.model + "_model_weights.h5"
     checkpoint = ModelCheckpoint(filepath, monitor=["acc"], verbose=1, mode='max')
-    callbacks_list = [checkpoint]
 
     """
     # early stopping callback
@@ -209,8 +213,13 @@ if args.mode == "train":
     callbacks_list = [early_stop]
     """
 
-    history = finetune_model.fit_generator(train_generator, epochs=args.num_epochs, workers=8, steps_per_epoch=num_train_images // BATCH_SIZE,
-        validation_data=validation_generator, validation_steps=num_val_images // BATCH_SIZE, class_weight='auto', shuffle=True, callbacks=callbacks_list)
+    tensorboard = TensorBoard(log_dir="./logs/{}/{}".format(args.model, datetime.datetime.now().strftime("%Y%m%d-%H%M%S")))
+    callbacks_list = [checkpoint, tensorboard]
+
+    history = finetune_model.fit_generator(train_generator, epochs=args.num_epochs, workers=8,
+                                           steps_per_epoch=num_train_images // BATCH_SIZE,
+                                           validation_data=validation_generator, validation_steps=num_val_images // BATCH_SIZE,
+                                           class_weight='auto', shuffle=True, callbacks=callbacks_list)
 
     utils.plot_training(history)
 
