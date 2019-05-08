@@ -24,7 +24,7 @@ import split_folders
 
 def split_folders(input_folder):
     try:
-        split_folders.ratio(input_folder, output="output", seed=5, ratio=(0.8, 0.1, 0.1)) # default values
+        split_folders.ratio(input_folder, output="output", seed=7, ratio=(0.6, 0.2, 0.2)) # default values
         print("done!")
     except Exception as e:
         print(e)
@@ -32,7 +32,7 @@ def split_folders(input_folder):
 
 def save_class_list(class_list, model_name, dataset_name):
     class_list.sort()
-    target=open("./checkpoints/" + model_name + "_" + dataset_name + "_class_list.txt",'w')
+    target=open("./checkpoints/" + model_name + "_" + dataset_name + "_class_list.txt",'w+')
     for c in class_list:
         target.write(c)
         target.write("\n")
@@ -66,6 +66,14 @@ def get_num_files(directory):
 def build_finetune_model(base_model, dropout, fc_layers, num_classes):
     for layer in base_model.layers:
         layer.trainable = False
+    """
+    ResNet50 finetune last Conv layer
+    for layer in base_model.layers:
+        if layer.name == "conv2d_94" or "batch_normalization_94":
+            layer.trainable = True
+        else:
+            layer.trainable = False
+    """
 
     x = base_model.output
     x = Flatten()(x)
