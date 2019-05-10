@@ -221,7 +221,7 @@ if args.mode == "train":
                                            validation_data=validation_generator, validation_steps=num_val_images // BATCH_SIZE,
                                            class_weight='auto', shuffle=True, callbacks=callbacks_list)
 
-    utils.plot_training(history)
+    utils.plot_training(history=history, model_name=args.model)
 
 elif args.mode == "predict":
 

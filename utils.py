@@ -88,7 +88,7 @@ def build_finetune_model(base_model, dropout, fc_layers, num_classes):
     return finetune_model
 
 # Plot the training and validation loss + accuracy
-def plot_training(history):
+def plot_training(history, model_name):
     acc = history.history['acc']
     val_acc = history.history['val_acc']
     loss = history.history['loss']
@@ -99,12 +99,14 @@ def plot_training(history):
     plt.plot(epochs, val_acc, 'b', label='Validation acc')
     plt.title('Training and validation accuracy')
     plt.legend()
+    fig1 = plt.gcf()
+    fig1.savefig("/home/yagiz/Sourcebox/git/Transfer-Learning-Suite/2 class loss_acc_graphs/{}_accuracy".format(model_name))
     plt.figure()
 
     plt.plot(epochs, loss, 'r', label='Training loss')
     plt.plot(epochs, val_loss, 'b', label='Validation loss')
     plt.title('Training and validation loss')
     plt.legend()
-    plt.show()
-
-    plt.savefig('acc_vs_epochs.png')
+    fig2 = plt.gcf()
+    fig2.savefig("/home/yagiz/Sourcebox/git/Transfer-Learning-Suite/2 class loss_acc_graphs/{}_loss".format(model_name))
+    #plt.show()
