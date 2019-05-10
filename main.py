@@ -26,6 +26,7 @@ from keras.optimizers import SGD, Adam
 from keras.models import Sequential, Model
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler, EarlyStopping, TensorBoard
 from keras.models import load_model
+#from tensorboard.plugins.beholder import Beholder
 
 # Utils
 import matplotlib.pyplot as plt
@@ -77,6 +78,7 @@ HEIGHT = args.resize_height
 FC_LAYERS = [1024, 1024]
 TRAIN_DIR = args.dataset + "/train/"
 VAL_DIR = args.dataset + "/val/"
+TEST_DIR = args.dataset + "/test/"
 
 preprocessing_function = None
 base_model = None
@@ -173,10 +175,13 @@ if args.mode == "train":
 
     val_datagen = ImageDataGenerator(preprocessing_function=preprocessing_function)
 
+    test_datagen = ImageDataGenerator(preprocessing_function=preprocessing_function)
+
     train_generator = train_datagen.flow_from_directory(TRAIN_DIR, target_size=(HEIGHT, WIDTH), batch_size=BATCH_SIZE)
 
     validation_generator = val_datagen.flow_from_directory(VAL_DIR, target_size=(HEIGHT, WIDTH), batch_size=int(BATCH_SIZE/2))
 
+    test_generator = test_datagen.flow_from_directory(TEST_DIR, target_size=(HEIGHT, WIDTH), batch_size=None)
 
     # Save the list of classes for prediction mode later
     class_list = utils.get_subfolders(TRAIN_DIR)
@@ -212,14 +217,21 @@ if args.mode == "train":
     early_stop = EarlyStopping(monitor='val_acc', patience=10, restore_best_weights=True, mode='min', verbose=1)
     callbacks_list = [early_stop]
     """
-
+    LOG_DIRECTORY = "./logs/"
     tensorboard = TensorBoard(log_dir="./logs/{}/{}".format(args.model, datetime.datetime.now().strftime("%Y%m%d-%H%M%S")))
+
+    #beholder = Beholder(LOG_DIRECTORY)
     callbacks_list = [checkpoint, tensorboard]
 
     history = finetune_model.fit_generator(train_generator, epochs=args.num_epochs, workers=8,
                                            steps_per_epoch=num_train_images // BATCH_SIZE,
                                            validation_data=validation_generator, validation_steps=num_val_images // BATCH_SIZE,
                                            class_weight='auto', shuffle=True, callbacks=callbacks_list)
+
+    """
+    doc: https://keras.io/models/sequential/#evaluate_generator
+    test_history = finetune_model.evaluate_generator(test_generator, callbacks=callbacks_list)
+    """
 
     utils.plot_training(history=history, model_name=args.model)
 
