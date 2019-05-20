@@ -20,11 +20,14 @@ from keras.layers import Dense, Activation, Flatten, Dropout
 from keras import backend as K
 
 # Other
+import sklearn
+import tensorflow as tf
 from keras import optimizers
 from keras import losses
+from keras import regularizers
 from keras.optimizers import SGD, Adam
 from keras.models import Sequential, Model
-from keras.callbacks import ModelCheckpoint, LearningRateScheduler, EarlyStopping, TensorBoard
+from keras.callbacks import ModelCheckpoint, LearningRateScheduler, EarlyStopping, TensorBoard, LambdaCallback
 from keras.models import load_model
 #from tensorboard.plugins.beholder import Beholder
 
@@ -57,7 +60,7 @@ parser.add_argument('--mode', type=str, default="train", help='Select "train", o
     Note that for prediction mode you have to specify an image to run the model on.')
 parser.add_argument('--image', type=str, default=None, help='The image you want to predict on. Only valid in "predict" mode.')
 parser.add_argument('--continue_training', type=str2bool, default=False, help='Whether to continue training from a checkpoint')
-parser.add_argument('--dataset', type=str, default="dataset", help='Dataset you are using.')
+parser.add_argument('--dataset', type=str, default="dataset_w_2class", help='Dataset you are using.')
 parser.add_argument('--resize_height', type=int, default=224, help='Height of cropped input image to network')
 parser.add_argument('--resize_width', type=int, default=224, help='Width of cropped input image to network')
 parser.add_argument('--batch_size', type=int, default=32, help='Number of images in each batch')
@@ -177,7 +180,7 @@ if args.mode == "train":
 
     test_datagen = ImageDataGenerator(preprocessing_function=preprocessing_function)
 
-    train_generator = train_datagen.flow_from_directory(TRAIN_DIR, target_size=(HEIGHT, WIDTH), batch_size=BATCH_SIZE)
+    train_generator = train_datagen.flow_from_directory(TRAIN_DIR, target_size=(HEIGHT, WIDTH), batch_size=BATCH_SIZE, save_to_dir="./logs/aug/")
 
     validation_generator = val_datagen.flow_from_directory(VAL_DIR, target_size=(HEIGHT, WIDTH), batch_size=int(BATCH_SIZE/2))
 
@@ -189,8 +192,15 @@ if args.mode == "train":
 
     finetune_model = utils.build_finetune_model(base_model, dropout=args.dropout, fc_layers=FC_LAYERS, num_classes=len(class_list))
 
+    _today = datetime.datetime.today().strftime('%d-%m-%Y')
+
+    if "2" in args.dataset:
+        class_string = "2_class_"
+    else:
+        class_string = "3_class_"
+
     if args.continue_training:
-        finetune_model.load_weights("./checkpoints/" + args.model + "_model_weights.h5")
+        finetune_model.load_weights("./checkpoints/" + class_string + args.model + _today + "_model_weights.h5")
 
     adam = Adam(lr=0.00001)
     finetune_model.compile(adam, loss='categorical_crossentropy', metrics=['accuracy'])
@@ -198,6 +208,7 @@ if args.mode == "train":
     num_train_images = utils.get_num_files(TRAIN_DIR)
     num_val_images = utils.get_num_files(VAL_DIR)
 
+    # Decay definition
     def lr_decay(epoch):
         if epoch%20 == 0 and epoch!=0:
             lr = K.get_value(model.optimizer.lr)
@@ -207,9 +218,12 @@ if args.mode == "train":
 
     learning_rate_schedule = LearningRateScheduler(lr_decay)
 
+    # L2 regularization definition
+    l2_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: regularizers.l2(0.01))
 
     # checkpoint callback
-    filepath="./checkpoints/" + args.model + "_model_weights.h5"
+
+    filepath="./checkpoints/" + args.model + _today + "_model_weights.h5"
     checkpoint = ModelCheckpoint(filepath, monitor=["acc"], verbose=1, mode='max')
 
     """
@@ -217,11 +231,12 @@ if args.mode == "train":
     early_stop = EarlyStopping(monitor='val_acc', patience=10, restore_best_weights=True, mode='min', verbose=1)
     callbacks_list = [early_stop]
     """
+
     LOG_DIRECTORY = "./logs/"
-    tensorboard = TensorBoard(log_dir="./logs/{}/{}".format(args.model, datetime.datetime.now().strftime("%Y%m%d-%H%M%S")))
+    tensorboard = TensorBoard(log_dir="./logs/{}/{}{}".format(args.model, class_string, datetime.datetime.now().strftime("%Y%m%d-%H%M%S")))
 
     #beholder = Beholder(LOG_DIRECTORY)
-    callbacks_list = [checkpoint, tensorboard]
+    callbacks_list = [tensorboard, l2_callback]
 
     history = finetune_model.fit_generator(train_generator, epochs=args.num_epochs, workers=8,
                                            steps_per_epoch=num_train_images // BATCH_SIZE,
@@ -233,7 +248,7 @@ if args.mode == "train":
     test_history = finetune_model.evaluate_generator(test_generator, callbacks=callbacks_list)
     """
 
-    utils.plot_training(history=history, model_name=args.model)
+    utils.plot_training(history=history, model_name=args.model, class_string=class_string, today=_today)
 
 elif args.mode == "predict":
 
@@ -272,3 +287,50 @@ elif args.mode == "predict":
     print("Confidence = ", confidence)
     print("Run time = ", run_time)
     cv2.imwrite("Predictions/" + class_name[0] + ".png", save_image)
+
+elif args.mode == "predict_dir":
+    from keras.preprocessing.image import load_img
+    val_datagen = ImageDataGenerator(preprocessing_function=preprocessing_function)
+    validation_generator = val_datagen.flow_from_directory(VAL_DIR, target_size=(HEIGHT, WIDTH), batch_size=int(BATCH_SIZE/2))
+    # Get the filenames from the generator
+    fnames = validation_generator.filenames
+
+    # Get the ground truth from generator
+    ground_truth = validation_generator.classes
+
+    # Get the label to class mapping from the generator
+    label2index = validation_generator.class_indices
+
+    # Getting the mapping from class index to class label
+    idx2label = dict((v,k) for k,v in label2index.items())
+
+    class_list_file = "./checkpoints/" + args.model + "_" + args.dataset + "_class_list.txt"
+
+    class_list = utils.load_class_list(class_list_file)
+
+    finetune_model = utils.build_finetune_model(base_model, dropout=args.dropout, fc_layers=FC_LAYERS, num_classes=len(class_list))
+    finetune_model.load_weights("./checkpoints/" + args.model + "_model_weights.h5")
+
+    # Get the predictions from the model using the generator
+    predictions = finetune_model.predict_generator(validation_generator, steps=validation_generator.samples/validation_generator.batch_size,verbose=1)
+    predicted_classes = np.argmax(predictions,axis=1)
+
+    errors = np.where(predicted_classes != ground_truth)[0]
+    print("No of errors = {}/{}".format(len(errors),validation_generator.samples))
+
+    # Show the errors
+    for i in range(len(errors)):
+        pred_class = np.argmax(predictions[errors[i]])
+        pred_label = idx2label[pred_class]
+
+        title = 'Original label:{}, Prediction :{}, confidence : {:.3f}'.format(
+            fnames[errors[i]].split('/')[0],
+            pred_label,
+            predictions[errors[i]][pred_class])
+
+        original = load_img('{}/{}'.format("./dataset_w_3class/val",fnames[errors[i]]))
+        plt.figure(figsize=[7,7])
+        plt.axis('off')
+        plt.title(title)
+        plt.imshow(original)
+        plt.show()
